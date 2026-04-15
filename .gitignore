@@ -1,0 +1,28 @@
+
+# Root ignore
+.vscode/
+*.log
+*.tmp
+__pycache__/
+*.pyc
+venv/
+
+# Python backend
+python-backend/venv/
+python-backend/__pycache__/
+
+# Vercel React app
+vercel-react-app/.next/
+vercel-react-app/node_modules/
+vercel-react-app/.env*
+
+# Vercel app
+vercel-app/node_modules/
+vercel-app/.env*
+
+# Java backend
+java-backend/target/
+
+# General
+node_modules/
+.DS_Store
