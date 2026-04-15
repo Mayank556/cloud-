@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Vercel Cloud App</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px;
+            border: none;
+            border-radius: 5px;
+            background-color: #0070f3;
+            color: white;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #005bb5;
+        }
+
+        .python-btn {
+            background-color: #306998;
+        }
+
+        .python-btn:hover {
+            background-color: #245377;
+        }
+
+        #output {
+            margin-top: 30px;
+            font-weight: bold;
+            font-size: 18px;
+            color: #2c3e50;
+            padding: 15px;
+            border-top: 2px solid #eee;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Vercel Full-Stack App 🚀</h1>
+        <p>Frontend: HTML/CSS/JS (Hosted on Vercel Global Edge CDN)</p>
+        <p>Backend: Node.js & Python Serverless Functions</p>
+
+        <button onclick="fetchNode()">Ping Node.js Backend</button>
+        <button class="python-btn" onclick="fetchPython()">Ping Python Backend</button>
+
+        <div id="output">Waiting for backend connection...</div>
+    </div>
+
+    <script>
+        async function fetchNode() {
+            document.getElementById('output').innerText = "Loading Node.js...";
+            try {
+                const res = await fetch('/api/node-backend');
+                const data = await res.json();
+                document.getElementById('output').innerText = "🟢 " + data.message;
+            } catch (err) {
+                document.getElementById('output').innerText = "❌ Error connecting to Node.";
+            }
+        }
+
+        async function fetchPython() {
+            document.getElementById('output').innerText = "Loading Python...";
+            try {
+                const res = await fetch('/api/python-backend');
+                const data = await res.json();
+                document.getElementById('output').innerText = "🐍 " + data.message;
+            } catch (err) {
+                document.getElementById('output').innerText = "❌ Error connecting to Python.";
+            }
+        }
+    </script>
+</body>
+
+</html>

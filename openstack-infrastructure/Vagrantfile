@@ -1,0 +1,17 @@
+Vagrant.configure("2") do |config|
+  # Use an Ubuntu 22.04 LTS image as the base operating system
+  config.vm.box = "ubuntu/jammy64"
+  
+  # Configure a static IP to access the OpenStack Dashboard (Horizon) later
+  config.vm.network "private_network", ip: "192.168.50.10"
+
+  # We need a powerful machine to act as a Private Cloud Hypervisor 
+  config.vm.provider "virtualbox" do |vb|
+    vb.name = "OpenStack-Master-Node"
+    vb.memory = "8192"  # 8 GB RAM minimum for OpenStack
+    vb.cpus = 4         # 4 CPU Cores
+  end
+
+  # Run the script to install OpenStack automatically!
+  config.vm.provision "shell", path: "install-openstack.sh"
+end
