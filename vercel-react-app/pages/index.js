@@ -2,242 +2,406 @@ import { useState, useEffect } from 'react';
 import Head from 'next/head';
 
 export default function Home() {
-    const [tasks, setTasks] = useState([]);
-    const [contacts, setContacts] = useState([]);
-    const [loadingTasks, setLoadingTasks] = useState(true);
-    const [loadingContacts, setLoadingContacts] = useState(true);
-    const [newTask, setNewTask] = useState('');
+  const [tasks, setTasks] = useState([]);
+  const [contacts, setContacts] = useState([]);
+  const [loadingTasks, setLoadingTasks] = useState(true);
+  const [loadingContacts, setLoadingContacts] = useState(true);
+  const [newTask, setNewTask] = useState('');
+  const [savingTask, setSavingTask] = useState(false);
 
-    useEffect(() => {
-        // Fetch Cloud PostgreSQL Tasks
-        fetch('/api/tasks')
-            .then(res => res.json())
-            .then(data => {
-                setTasks(data);
-                setLoadingTasks(false);
-            })
-            .catch(err => {
-                console.error('API Error', err);
-                setLoadingTasks(false);
-            });
+  const fetchTasks = async () => {
+    setLoadingTasks(true);
+    try {
+      const res = await fetch('/api/tasks');
+      const data = await res.json();
+      setTasks(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('API Error', error);
+      setTasks([]);
+    } finally {
+      setLoadingTasks(false);
+    }
+  };
 
-        // Fetch Live Salesforce Cloud Contacts
-        fetch('/api/salesforce')
-            .then(res => res.json())
-            .then(data => {
-                if (Array.isArray(data)) {
-                    setContacts(data);
-                }
-                setLoadingContacts(false);
-            })
-            .catch(err => {
-                console.error('Salesforce API Error', err);
-                setLoadingContacts(false);
-            });
-    }, []);
+  const fetchContacts = async () => {
+    setLoadingContacts(true);
+    try {
+      const res = await fetch('/api/salesforce');
+      const data = await res.json();
+      setContacts(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Salesforce API Error', error);
+      setContacts([]);
+    } finally {
+      setLoadingContacts(false);
+    }
+  };
 
-    const addTask = (e) => {
-        e.preventDefault();
-        if (!newTask.trim()) return;
-        // Optimistic UI Update
-        const newTaskObj = { id: Date.now(), text: newTask, completed: false };
-        setTasks([...tasks, newTaskObj]);
-        setNewTask('');
-    };
+  useEffect(() => {
+    fetchTasks();
+    fetchContacts();
+  }, []);
 
-    const toggleTask = (id) => {
-        setTasks(tasks.map(task =>
-            task.id === id ? { ...task, completed: !task.completed } : task
-        ));
-    };
+  const addTask = async (e) => {
+    e.preventDefault();
+    const text = newTask.trim();
+    if (!text) return;
 
-    const deleteTask = (id) => {
-        setTasks(tasks.filter(task => task.id !== id));
-    };
+    setSavingTask(true);
+    try {
+      const res = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
 
-    return (
-        <div style={styles.page}>
-            <Head>
-                <title>Enterprise Cloud Dashboard</title>
-                <meta name="viewport" content="width=device-width, initial-scale=1" />
-            </Head>
+      if (!res.ok) {
+        console.error('Failed to save task', await res.text());
+        return;
+      }
 
-            <main style={styles.main}>
-                {/* Hero Header */}
-                <header style={styles.header}>
-                    <h1 style={styles.title}>Unified Cloud Operations</h1>
-                    <p style={styles.subtitle}>
-                        Bringing Data Together: Vercel Serverless Edge, PostgreSQL, and Salesforce CRM.
-                    </p>
-                </header>
+      const created = await res.json();
+      setTasks((prev) => [...prev, created]);
+      setNewTask('');
+    } catch (error) {
+      console.error('Save error', error);
+    } finally {
+      setSavingTask(false);
+    }
+  };
 
-                <div style={styles.grid}>
-                    {/* LEFT COLUMN: PostgreSQL Task Manager */}
-                    <div style={styles.card}>
-                        <div style={styles.cardHeader}>
-                            <h2 style={styles.cardTitle}>🐘 PostgreSQL Tasks</h2>
-                            <span style={styles.badge}>Live Database</span>
+  const toggleTask = async (task) => {
+    try {
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ completed: !task.completed })
+      });
+
+      if (!res.ok) {
+        console.error('Toggle error', await res.text());
+        return;
+      }
+
+      const updated = await res.json();
+      setTasks((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+    } catch (error) {
+      console.error('Toggle error', error);
+    }
+  };
+
+  const deleteTask = async (id) => {
+    try {
+      const res = await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
+      if (!res.ok && res.status !== 204) {
+        console.error('Delete error', await res.text());
+        return;
+      }
+      setTasks((prev) => prev.filter((task) => task.id !== id));
+    } catch (error) {
+      console.error('Delete error', error);
+    }
+  };
+
+  return (
+    <div style={styles.page}>
+      <Head>
+        <title>Enterprise Cloud Dashboard</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </Head>
+
+      <main style={styles.main}>
+        <header style={styles.header}>
+          <h1 style={styles.title}>Unified Cloud Operations</h1>
+          <p style={styles.subtitle}>
+            Bringing Data Together: Vercel Serverless Edge, PostgreSQL, and Salesforce CRM.
+          </p>
+        </header>
+
+        <div style={styles.grid}>
+          <div style={styles.card}>
+            <div style={styles.cardHeader}>
+              <h2 style={styles.cardTitle}>🐘 PostgreSQL Tasks</h2>
+              <span style={styles.badge}>Live Database</span>
+            </div>
+
+            <form onSubmit={addTask} style={styles.form}>
+              <input
+                type="text"
+                style={styles.input}
+                placeholder="What needs to be done?"
+                value={newTask}
+                onChange={(e) => setNewTask(e.target.value)}
+              />
+              <button type="submit" style={styles.button} disabled={savingTask}>
+                {savingTask ? 'Saving...' : 'Add'}
+              </button>
+            </form>
+
+            {loadingTasks ? (
+              <div style={styles.loader}>Loading tasks from the cloud database...</div>
+            ) : (
+              <ul style={styles.list}>
+                {tasks.length > 0 ? (
+                  tasks.map((task) => (
+                    <li key={task.id} style={styles.listItem}>
+                      <div style={styles.taskContent} onClick={() => toggleTask(task)}>
+                        <div style={{ ...styles.checkbox, ...(task.completed ? styles.checkboxChecked : {}) }}>
+                          {task.completed && '✓'}
                         </div>
+                        <span style={{ ...styles.taskText, ...(task.completed ? styles.taskCompleted : {}) }}>
+                          {task.text}
+                        </span>
+                      </div>
+                      <button onClick={() => deleteTask(task.id)} style={styles.deleteBtn}>
+                        Delete
+                      </button>
+                    </li>
+                  ))
+                ) : (
+                  <li style={styles.emptyState}>No active tasks in database.</li>
+                )}
+              </ul>
+            )}
+          </div>
 
-                        {/* Add Task Input Form */}
-                        <form onSubmit={addTask} style={styles.form}>
-                            <input
-                                type="text"
-                                style={styles.input}
-                                placeholder="What needs to be done?"
-                                value={newTask}
-                                onChange={(e) => setNewTask(e.target.value)}
-                            />
-                            <button type="submit" style={styles.button}>Add</button>
-                        </form>
+          <div style={styles.card}>
+            <div style={styles.cardHeader}>
+              <h2 style={{ ...styles.cardTitle, color: '#00a1e0' }}>☁️ Salesforce CRM</h2>
+              <span style={styles.badgeBlue}>Real-time API</span>
+            </div>
 
-                        {/* Task List */}
-                        {loadingTasks ? (
-                            <div style={styles.loader}>Loading from cloud database...</div>
-                        ) : (
-                            <ul style={styles.list}>
-                                {tasks.length > 0 ? tasks.map(task => (
-                                    <li key={task.id} style={styles.listItem}>
-                                        <div style={styles.taskContent} onClick={() => toggleTask(task.id)}>
-                                            <div style={{ ...styles.checkbox, ...(task.completed ? styles.checkboxChecked : {}) }}>
-                                                {task.completed && '✓'}
-                                            </div>
-                                            <span style={{
-                                                ...styles.taskText,
-                                                ...(task.completed ? styles.taskCompleted : {})
-                                            }}>
-                                                {task.text}
-                                            </span>
-                                        </div>
-                                        <button onClick={() => deleteTask(task.id)} style={styles.deleteBtn}>
-                                            Delete
-                                        </button>
-                                    </li>
-                                )) : (
-                                    <li style={styles.emptyState}>No active tasks in database.</li>
-                                )}
-                            </ul>
-                        )}
-                    </div>
+            <div style={styles.infoBox}>Syncing Accounts dynamically from your developer backend.</div>
 
-                    {/* RIGHT COLUMN: Salesforce CRM Contacts */}
-                    <div style={styles.card}>
-                        <div style={styles.cardHeader}>
-                            <h2 style={{...styles.cardTitle, color: '#00a1e0'}}>☁️ Salesforce CRM</h2>
-                            <span style={styles.badgeBlue}>Real-time API</span>
-                        </div>
-
-                        <div style={styles.infoBox}>
-                            Syncing Accounts dynamically from your developer backend.
-                        </div>
-
-                        {loadingContacts ? (
-                            <div style={styles.loader}>Securely authenticating with Salesforce...</div>
-                        ) : (
-                            <ul style={styles.list}>
-                                {contacts.length > 0 ? contacts.map(c => (
-                                    <li key={c.Id || c.id} style={styles.contactItem}>
-                                        <div style={styles.avatar}>{c.Name ? c.Name.charAt(0).toUpperCase() : '👤'}</div>
-                                        <div style={styles.contactDetails}>
-                                            <p style={styles.contactName}>{c.Name}</p>
-                                            <p style={styles.contactTitle}>{c.Title || 'Senior Consultant'}</p>
-                                        </div>
-                                    </li>
-                                )) : (
-                                    <li style={styles.emptyState}>No Salesforce contacts synced.</li>
-                                )}
-                            </ul>
-                        )}
-                    </div>
-                </div>
-            </main>
+            {loadingContacts ? (
+              <div style={styles.loader}>Securely authenticating with Salesforce...</div>
+            ) : (
+              <ul style={styles.list}>
+                {contacts.length > 0 ? (
+                  contacts.map((c) => (
+                    <li key={c.Id || c.id} style={styles.contactItem}>
+                      <div style={styles.avatar}>{c.Name ? c.Name.charAt(0).toUpperCase() : '👤'}</div>
+                      <div style={styles.contactDetails}>
+                        <p style={styles.contactName}>{c.Name || 'Unknown'}</p>
+                        <p style={styles.contactTitle}>{c.Title || 'Salesforce contact'}</p>
+                      </div>
+                    </li>
+                  ))
+                ) : (
+                  <li style={styles.emptyState}>No Salesforce contacts synced.</li>
+                )}
+              </ul>
+            )}
+          </div>
         </div>
-    );
+      </main>
+    </div>
+  );
 }
 
-// -------------------------------------------------------------
-// 🎨 BEAUTIFUL, MODERN, HIGH-END CSS STYLING
-// -------------------------------------------------------------
 const styles = {
-    page: {
-        minHeight: '100vh',
-        backgroundColor: '#f8fafc',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-        padding: '2rem 1rem',
-        color: '#0f172a'
-    },
-    main: {
-        maxWidth: '1100px',
-        margin: '0 auto',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '2rem'
-    },
-    header: {
-        backgroundColor: '#ffffff',
-        padding: '2.5rem',
-        borderRadius: '16px',
-        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)',
-        textAlign: 'center',
-        borderTop: '6px solid #3b82f6'
-    },
-    title: {
-        margin: '0 0 0.5rem 0',
-        fontSize: '2.2rem',
-        fontWeight: '800',
-        color: '#1e293b',
-        letterSpacing: '-0.5px'
-    },
-    subtitle: {
-        margin: 0,
-        fontSize: '1.1rem',
-        color: '#64748b'
-    },
-    grid: {
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
-        gap: '2rem'
-    },
-    card: {
-        backgroundColor: '#ffffff',
-        borderRadius: '16px',
-        padding: '2rem',
-        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.04)',
-        display: 'flex',
-        flexDirection: 'column'
-    },
-    cardHeader: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '1.5rem',
-        paddingBottom: '1rem',
-        borderBottom: '1px solid #f1f5f9'
-    },
-    cardTitle: {
-        margin: 0,
-        fontSize: '1.4rem',
-        fontWeight: '700',
-        color: '#1e293b'
-    },
-    badge: {
-        backgroundColor: '#dbeafe',
-        color: '#2563eb',
-        padding: '4px 12px',
-        borderRadius: '20px',
-        fontSize: '0.85rem',
-        fontWeight: '600'
-    },
-    badgeBlue: {
-        backgroundColor: '#e0f2fe',
-        color: '#0284c7',
-        padding: '4px 12px',
-        borderRadius: '20px',
-        fontSize: '0.85rem',
-        fontWeight: '600'
-    },
-    form: {
-        display: 'flex',
+  page: {
+    minHeight: '100vh',
+    backgroundColor: '#f8fafc',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    padding: '2rem 1rem',
+    color: '#0f172a'
+  },
+  main: {
+    maxWidth: '1100px',
+    margin: '0 auto',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2rem'
+  },
+  header: {
+    backgroundColor: '#ffffff',
+    padding: '2.5rem',
+    borderRadius: '16px',
+    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)',
+    textAlign: 'center',
+    borderTop: '6px solid #3b82f6'
+  },
+  title: {
+    margin: '0 0 0.5rem 0',
+    fontSize: '2.2rem',
+    fontWeight: '800',
+    color: '#1e293b',
+    letterSpacing: '-0.5px'
+  },
+  subtitle: {
+    margin: 0,
+    fontSize: '1.1rem',
+    color: '#64748b'
+  },
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+    gap: '2rem'
+  },
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: '16px',
+    padding: '2rem',
+    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.04)',
+    display: 'flex',
+    flexDirection: 'column'
+  },
+  cardHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '1.5rem',
+    paddingBottom: '1rem',
+    borderBottom: '1px solid #f1f5f9'
+  },
+  cardTitle: {
+    margin: 0,
+    fontSize: '1.4rem',
+    fontWeight: '700',
+    color: '#1e293b'
+  },
+  badge: {
+    backgroundColor: '#dbeafe',
+    color: '#2563eb',
+    padding: '4px 12px',
+    borderRadius: '20px',
+    fontSize: '0.85rem',
+    fontWeight: '600'
+  },
+  badgeBlue: {
+    backgroundColor: '#e0f2fe',
+    color: '#0284c7',
+    padding: '4px 12px',
+    borderRadius: '20px',
+    fontSize: '0.85rem',
+    fontWeight: '600'
+  },
+  form: {
+    display: 'flex',
+    gap: '0.75rem',
+    marginBottom: '1.5rem'
+  },
+  input: {
+    flex: 1,
+    padding: '0.95rem 1rem',
+    borderRadius: '14px',
+    border: '1px solid #e2e8f0',
+    backgroundColor: '#f8fafc',
+    fontSize: '1rem',
+    color: '#0f172a'
+  },
+  button: {
+    padding: '0.95rem 1.5rem',
+    borderRadius: '14px',
+    border: 'none',
+    backgroundColor: '#2563eb',
+    color: '#ffffff',
+    fontWeight: '700',
+    cursor: 'pointer'
+  },
+  list: {
+    listStyle: 'none',
+    margin: 0,
+    padding: 0,
+    display: 'grid',
+    gap: '1rem'
+  },
+  listItem: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '1.1rem 1.2rem',
+    borderRadius: '16px',
+    backgroundColor: '#f8fafc',
+    border: '1px solid #e2e8f0'
+  },
+  taskContent: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.9rem',
+    cursor: 'pointer'
+  },
+  checkbox: {
+    width: '28px',
+    height: '28px',
+    borderRadius: '8px',
+    border: '2px solid #cbd5e1',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: '#ffffff'
+  },
+  checkboxChecked: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb'
+  },
+  taskText: {
+    fontSize: '1rem',
+    color: '#0f172a'
+  },
+  taskCompleted: {
+    color: '#64748b',
+    textDecoration: 'line-through'
+  },
+  deleteBtn: {
+    border: 'none',
+    backgroundColor: '#fecaca',
+    borderRadius: '12px',
+    padding: '0.75rem 1rem',
+    cursor: 'pointer',
+    fontWeight: '700',
+    color: '#7f1d1d'
+  },
+  loader: {
+    padding: '1.5rem',
+    textAlign: 'center',
+    color: '#64748b'
+  },
+  emptyState: {
+    color: '#64748b',
+    padding: '1rem 0'
+  },
+  infoBox: {
+    backgroundColor: '#eff6ff',
+    borderRadius: '14px',
+    padding: '1rem 1.2rem',
+    marginBottom: '1.5rem',
+    color: '#1d4ed8'
+  },
+  contactItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.9rem',
+    padding: '1rem',
+    borderRadius: '14px',
+    border: '1px solid #e2e8f0',
+    backgroundColor: '#f8fafc'
+  },
+  avatar: {
+    width: '42px',
+    height: '42px',
+    borderRadius: '50%',
+    backgroundColor: '#e0f2fe',
+    color: '#0369a1',
+    display: 'grid',
+    placeItems: 'center',
+    fontWeight: '800'
+  },
+  contactDetails: {
+    display: 'flex',
+    flexDirection: 'column'
+  },
+  contactName: {
+    margin: 0,
+    fontSize: '1rem',
+    fontWeight: '700'
+  },
+  contactTitle: {
+    margin: '0.2rem 0 0 0',
+    color: '#64748b'
+  }
+};
         gap: '10px',
         marginBottom: '1.5rem'
     },
