@@ -10,12 +10,27 @@ const ensureTasksTable = async () => {
   `;
 };
 
+const buildTasksQuery = ({ status, search }) => {
+  const conditions = [];
+  if (status === 'active') conditions.push(sql`completed = FALSE`);
+  if (status === 'completed') conditions.push(sql`completed = TRUE`);
+  if (search) conditions.push(sql`text ILIKE ${`%${search}%`}`);
+
+  let query = sql`SELECT * FROM tasks`;
+  if (conditions.length > 0) {
+    query = sql`${query} WHERE ${sql.join(conditions, sql` AND `)}`;
+  }
+  return sql`${query} ORDER BY id ASC`;
+};
+
 export default async function handler(req, res) {
   await ensureTasksTable();
 
   if (req.method === 'GET') {
+    const { status = 'all', search = '' } = req.query;
     try {
-      const { rows } = await sql`SELECT * FROM tasks ORDER BY id ASC;`;
+      const query = buildTasksQuery({ status, search: String(search).trim() });
+      const { rows } = await query;
       return res.status(200).json(rows);
     } catch (error) {
       console.error(error);
@@ -29,7 +44,6 @@ export default async function handler(req, res) {
       if (!text || typeof text !== 'string' || !text.trim()) {
         return res.status(400).json({ error: 'Task text is required.' });
       }
-
       const { rows } = await sql`
         INSERT INTO tasks (text) VALUES (${text.trim()}) RETURNING *;
       `;
